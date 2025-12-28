@@ -168,6 +168,14 @@ class ModbusRTUMonitorClimate(
                 f"Failed to set temperature for slave {self._slave_id}"
             ) from ex
 
+        # Update register value immediately to prevent UI flickering
+        if self._slave_id in self.coordinator.data:
+            slave_data = self.coordinator.data[self._slave_id]
+            if slave_data.registers is None:
+                slave_data.registers = {}
+            # Store scaled value (temperature * 10) in register
+            slave_data.registers[SETPOINT_REGISTER] = int(temperature * 10)
+
         # Update state
         self.async_write_ha_state()
 

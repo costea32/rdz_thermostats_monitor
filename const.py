@@ -18,6 +18,26 @@ SETPOINT_REGISTER = 144  # Register 144 (decimal, 0x90 hex)
 HEATING_STATUS_REGISTER = 211  # Register 211
 REGISTER_COUNT = 4
 
+# Register name mapping for user-friendly display in Home Assistant
+# Add new register names here as you discover them
+# Format: register_number: "Friendly Name"
+REGISTER_NAMES: dict[int, str] = {
+    # Known registers
+    144: "Setpoint",
+    145: "Max Setpoint",
+    146: "Min Setpoint",
+    154: "Hour",
+    155: "Minute",
+    156: "Day of week",
+    157: "Current temperature",
+    179: "Outside temperature",
+    211: "Heating status",
+    # Add more registers as discovered
+    # Example:
+    # 165: "Register name",
+    # 166: "Another register",
+}
+
 # Coil configuration
 COIL_START_ADDRESS = 0x01  # Starting coil address (1 in decimal)
 COIL_COUNT = 40  # Number of coils to monitor

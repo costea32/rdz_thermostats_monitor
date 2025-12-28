@@ -21,6 +21,7 @@ from .const import (
     REGISTER_MONITOR_COUNT,
     REGISTER_MONITOR_COUNT_2,
     REGISTER_MONITOR_COUNT_3,
+    REGISTER_NAMES,
     REGISTER_START_ADDRESS,
     REGISTER_START_ADDRESS_2,
     REGISTER_START_ADDRESS_3,
@@ -217,7 +218,9 @@ class ModbusRTUMonitorRegisterSensor(
         self._attr_unique_id = (
             f"{coordinator.config_entry.entry_id}_{slave_id}_register{register_addr}"
         )
-        self._attr_name = f"Register{register_addr}"
+
+        # Use friendly name from mapping if available, otherwise use register number
+        self._attr_name = REGISTER_NAMES.get(register_addr, f"Register {register_addr}")
 
         # Same device as climate and humidity entities
         self._attr_device_info = DeviceInfo(
