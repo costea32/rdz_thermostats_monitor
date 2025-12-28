@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Modbus RTU monitor",
+        "description": "Enter the host and port of your Modbus RTU over TCP gateway. Slaves will be discovered automatically.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Modbus gateway",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This Modbus gateway is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "humidity": {
+        "name": "Humidity"
+      },
+      "register": {
+        "name": "Register {register_number}"
+      }
+    },
+    "binary_sensor": {
+      "coil": {
+        "name": "Coil {coil_number}"
+      }
+    }
+  }
+}
