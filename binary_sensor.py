@@ -65,6 +65,7 @@ class ModbusRTUMonitorCoilSensor(
     """Binary sensor entity for Modbus RTU coil state."""
 
     _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = False  # Disabled by default, user can enable if needed
 
     def __init__(
         self,

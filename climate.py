@@ -68,6 +68,7 @@ class ModbusRTUMonitorClimate(
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT]  # Always on, no off mode
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_target_temperature_step = 0.1  # Allow 0.1°C increments
 
     def __init__(
         self,
