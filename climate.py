@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
+    HVACAction,
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -17,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import ModbusRTUMonitorConfigEntry
-from .const import DOMAIN, MANUFACTURER, MODEL
+from .const import DOMAIN, HEATING_STATUS_REGISTER, MANUFACTURER, MODEL, SETPOINT_REGISTER
 from .coordinator import ModbusRTUMonitorCoordinator
 
 
@@ -89,8 +90,8 @@ class ModbusRTUMonitorClimate(
             model=MODEL,
         )
 
-        # Target temperature storage (not available from passive monitoring)
-        self._attr_target_temperature = 20.0  # Default
+        # Target temperature cache (synced from register 144 when available)
+        self._attr_target_temperature = 20.0  # Default fallback
 
     @property
     def available(self) -> bool:
@@ -107,10 +108,46 @@ class ModbusRTUMonitorClimate(
         return self.coordinator.data[self._slave_id].temperature
 
     @property
+    def target_temperature(self) -> float | None:
+        """Return target temperature from device register or local cache."""
+        if self._slave_id not in self.coordinator.data:
+            return self._attr_target_temperature
+
+        slave_data = self.coordinator.data[self._slave_id]
+
+        # Try to read from register 144 (setpoint register)
+        if slave_data.registers and SETPOINT_REGISTER in slave_data.registers:
+            # Scale register value (divide by 10) to get temperature in °C
+            setpoint_raw = slave_data.registers[SETPOINT_REGISTER]
+            # Update local cache to stay in sync with device
+            self._attr_target_temperature = setpoint_raw / 10.0
+            return self._attr_target_temperature
+
+        # Fall back to local cache if register not yet read
+        return self._attr_target_temperature
+
+    @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode."""
         # Always HEAT mode (no on/off control as per requirements)
-        return HVACMode.HEAT
+        return HVACMode.AUTO
+
+    @property
+    def hvac_action(self) -> HVACAction | None:
+        """Return current HVAC action based on heating status register."""
+        if self._slave_id not in self.coordinator.data:
+            return None
+
+        slave_data = self.coordinator.data[self._slave_id]
+
+        # Read heating status from register 213
+        if slave_data.registers and HEATING_STATUS_REGISTER in slave_data.registers:
+            heating_status = slave_data.registers[HEATING_STATUS_REGISTER]
+            # Return HEATING if register value is 1, otherwise IDLE
+            return HVACAction.HEATING if heating_status == 1 else HVACAction.IDLE
+
+        # If register not available, return None (unknown state)
+        return None
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature and write to device."""

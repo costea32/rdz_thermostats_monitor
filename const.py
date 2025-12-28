@@ -15,6 +15,7 @@ DEFAULT_PORT = 502
 # Modbus register configuration
 TEMP_HUMIDITY_REGISTER = 0x83  # Register 131 (decimal)
 SETPOINT_REGISTER = 144  # Register 144 (decimal, 0x90 hex)
+HEATING_STATUS_REGISTER = 211  # Register 211
 REGISTER_COUNT = 4
 
 # Coil configuration
@@ -56,6 +57,7 @@ class SlaveData:
     available: bool = True
     coils: list[bool] | None = None  # 40 coil states (True=ON, False=OFF)
     registers: dict[int, int] | None = None  # Register address -> int16 value
+    setpoint: float | None = None  # Target temperature setpoint (°C)
 
 
 @dataclass
