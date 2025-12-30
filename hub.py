@@ -197,17 +197,19 @@ class ModbusRTUMonitorHub:
 
     async def async_setup(self) -> bool:
         """Set up the hub and start monitoring."""
-        try:
-            await self._connect()
-            self._monitor_task = asyncio.create_task(self._monitor_loop())
-            self._availability_task = asyncio.create_task(
-                self._availability_check_loop()
-            )
-            return True
-        except Exception as ex:
-            raise ConfigEntryNotReady(
-                f"Failed to connect to {self.host}:{self.port}"
-            ) from ex
+        # Start monitor and availability tasks
+        # The monitor loop handles all connection logic (initial and reconnections)
+        self._monitor_task = asyncio.create_task(self._monitor_loop())
+        self._availability_task = asyncio.create_task(
+            self._availability_check_loop()
+        )
+
+        _LOGGER.info(
+            "Modbus RTU Monitor hub starting for %s:%s (monitor task will establish connection)",
+            self.host,
+            self.port,
+        )
+        return True
 
     async def _connect(self) -> None:
         """Establish TCP connection."""
@@ -252,15 +254,36 @@ class ModbusRTUMonitorHub:
     async def _monitor_loop(self) -> None:
         """Main monitoring loop for passive frame reception."""
         buffer = bytearray()
+        first_connection_attempt = True
+        consecutive_timeouts = 0
+        TIMEOUT_THRESHOLD = 30  # 30 timeouts = 30 seconds of no data
 
         while True:
             try:
                 # Check if reader is valid before attempting to read
                 if self._reader is None:
-                    # No active connection, attempt reconnect
-                    _LOGGER.info("No active connection to %s:%s, attempting reconnect", self.host, self.port)
-                    await self._reconnect()
-                    # Clear buffer for fresh start after reconnection
+                    consecutive_timeouts = 0  # Reset counter after reconnect attempt
+                    if first_connection_attempt:
+                        # First connection attempt - try immediately without delay
+                        _LOGGER.info("Attempting initial connection to %s:%s", self.host, self.port)
+                        first_connection_attempt = False
+                        try:
+                            await self._connect()
+                            _LOGGER.info("Connected to Modbus gateway at %s:%s", self.host, self.port)
+                        except Exception as ex:
+                            _LOGGER.warning(
+                                "Initial connection failed to %s:%s - %s (will retry)",
+                                self.host,
+                                self.port,
+                                ex,
+                            )
+                            # Fall through to reconnect logic with delay
+                            await asyncio.sleep(30)
+                    else:
+                        # Subsequent reconnection attempts - use delay to prevent DDOS
+                        _LOGGER.info("No active connection to %s:%s, attempting reconnect", self.host, self.port)
+                        await self._reconnect()
+                    # Clear buffer for fresh start after connection attempt
                     buffer.clear()
                     continue
 
@@ -268,12 +291,16 @@ class ModbusRTUMonitorHub:
                 data = await asyncio.wait_for(self._reader.read(1024), timeout=1.0)
 
                 if not data:
-                    # Connection closed
+                    # Connection closed gracefully
                     _LOGGER.warning("Connection closed to %s:%s, attempting reconnect", self.host, self.port)
+                    consecutive_timeouts = 0  # Reset counter
                     await self._reconnect()
                     # Clear buffer for fresh start after reconnection
                     buffer.clear()
                     continue
+
+                # Successfully received data - reset timeout counter
+                consecutive_timeouts = 0
 
                 buffer.extend(data)
 
@@ -309,7 +336,26 @@ class ModbusRTUMonitorHub:
                     await asyncio.sleep(FRAME_PROCESSING_DELAY)
 
             except asyncio.TimeoutError:
-                # Normal timeout, continue
+                # Track consecutive timeouts to detect dead connections
+                consecutive_timeouts += 1
+
+                if consecutive_timeouts >= TIMEOUT_THRESHOLD:
+                    # Connection appears dead (30+ seconds of no data)
+                    _LOGGER.warning(
+                        "Connection timeout to %s:%s (%d consecutive timeouts, %ds with no data) - assuming connection dead, will reconnect",
+                        self.host,
+                        self.port,
+                        consecutive_timeouts,
+                        consecutive_timeouts,
+                    )
+                    # Null reader/writer to trigger reconnection on next iteration
+                    self._reader = None
+                    self._writer = None
+                    consecutive_timeouts = 0
+                    # Clear buffer for fresh start
+                    buffer.clear()
+
+                # Continue to next iteration (either to reconnect or wait for next timeout)
                 continue
             except asyncio.CancelledError:
                 break
@@ -324,12 +370,14 @@ class ModbusRTUMonitorHub:
                 # Null out connection and trigger reconnect
                 self._reader = None
                 self._writer = None
+                consecutive_timeouts = 0  # Reset counter
                 await self._reconnect()
                 buffer.clear()
                 continue
             except Exception as ex:
                 # Other unexpected errors
                 _LOGGER.error("Unexpected error in monitor loop for %s:%s - %s", self.host, self.port, ex)
+                consecutive_timeouts = 0  # Reset counter on unexpected errors
                 await asyncio.sleep(5)
 
     async def _handle_frame(self, frame: ModbusRTUFrame) -> None:
