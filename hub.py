@@ -221,10 +221,17 @@ class ModbusRTUMonitorHub:
 
     async def _reconnect(self) -> None:
         """Reconnect to Modbus gateway after connection loss."""
-        # Close existing connection
+        # Close existing connection and null out references
         if self._writer:
-            self._writer.close()
-            await self._writer.wait_closed()
+            try:
+                self._writer.close()
+                await self._writer.wait_closed()
+            except Exception as ex:
+                _LOGGER.debug("Error closing writer during reconnect: %s", ex)
+
+        # Always null out reader/writer to ensure clean state
+        self._reader = None
+        self._writer = None
 
         # Wait before reconnecting (30 seconds to prevent DDOS during server outages)
         await asyncio.sleep(30)
@@ -232,10 +239,15 @@ class ModbusRTUMonitorHub:
         # Attempt reconnection
         try:
             await self._connect()
-            _LOGGER.info("Reconnected to Modbus gateway")
+            _LOGGER.info("Reconnected to Modbus gateway at %s:%s", self.host, self.port)
         except Exception as ex:
-            _LOGGER.error("Reconnection failed: %s", ex)
-            # Will retry on next loop iteration
+            _LOGGER.error(
+                "Reconnection failed for %s:%s - %s (will retry in 30 seconds)",
+                self.host,
+                self.port,
+                ex,
+            )
+            # Reader/writer are already None, loop will detect this and retry
 
     async def _monitor_loop(self) -> None:
         """Main monitoring loop for passive frame reception."""
@@ -243,13 +255,24 @@ class ModbusRTUMonitorHub:
 
         while True:
             try:
+                # Check if reader is valid before attempting to read
+                if self._reader is None:
+                    # No active connection, attempt reconnect
+                    _LOGGER.info("No active connection to %s:%s, attempting reconnect", self.host, self.port)
+                    await self._reconnect()
+                    # Clear buffer for fresh start after reconnection
+                    buffer.clear()
+                    continue
+
                 # Read with timeout to allow graceful shutdown
                 data = await asyncio.wait_for(self._reader.read(1024), timeout=1.0)
 
                 if not data:
                     # Connection closed
-                    _LOGGER.warning("Connection closed, attempting reconnect")
+                    _LOGGER.warning("Connection closed to %s:%s, attempting reconnect", self.host, self.port)
                     await self._reconnect()
+                    # Clear buffer for fresh start after reconnection
+                    buffer.clear()
                     continue
 
                 buffer.extend(data)
@@ -290,8 +313,23 @@ class ModbusRTUMonitorHub:
                 continue
             except asyncio.CancelledError:
                 break
+            except (AttributeError, OSError, ConnectionError) as ex:
+                # Connection-related errors - trigger reconnection
+                _LOGGER.warning(
+                    "Connection error in monitor loop for %s:%s - %s (will reconnect)",
+                    self.host,
+                    self.port,
+                    ex,
+                )
+                # Null out connection and trigger reconnect
+                self._reader = None
+                self._writer = None
+                await self._reconnect()
+                buffer.clear()
+                continue
             except Exception as ex:
-                _LOGGER.error("Error in monitor loop: %s", ex)
+                # Other unexpected errors
+                _LOGGER.error("Unexpected error in monitor loop for %s:%s - %s", self.host, self.port, ex)
                 await asyncio.sleep(5)
 
     async def _handle_frame(self, frame: ModbusRTUFrame) -> None:
@@ -632,10 +670,10 @@ class ModbusRTUMonitorHub:
     ) -> None:
         """Write temperature setpoint to slave using RTU protocol over existing connection."""
         async with self._write_lock:
-            # Ensure writer is available
-            if not self._writer:
+            # Ensure writer is available and not closed
+            if not self._writer or self._writer.is_closing():
                 raise HomeAssistantError(
-                    "No active connection to Modbus gateway - cannot write setpoint"
+                    f"No active connection to Modbus gateway at {self.host}:{self.port} - cannot write setpoint"
                 )
 
             # Scale temperature value (multiply by 10)
