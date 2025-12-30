@@ -31,7 +31,7 @@ REGISTER_NAMES: dict[int, str] = {
     156: "Day of week",
     157: "Current temperature",
     179: "Outside temperature",
-    211: "Heating status",
+    211: "Zone pump",
     # Add more registers as discovered
     # Example:
     # 165: "Register name",

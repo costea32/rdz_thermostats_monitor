@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import ModbusRTUMonitorConfigEntry
 from .const import (
     DOMAIN,
+    HEATING_STATUS_REGISTER,
     MANUFACTURER,
     MODEL,
     REGISTER_MONITOR_COUNT,

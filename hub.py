@@ -226,8 +226,8 @@ class ModbusRTUMonitorHub:
             self._writer.close()
             await self._writer.wait_closed()
 
-        # Wait before reconnecting
-        await asyncio.sleep(5)
+        # Wait before reconnecting (30 seconds to prevent DDOS during server outages)
+        await asyncio.sleep(30)
 
         # Attempt reconnection
         try:
