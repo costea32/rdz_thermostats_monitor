@@ -1,0 +1,22 @@
+{
+  "name": "My HA Component Dev",
+
+  // Use a simple Python image
+  "image":  "mcr.microsoft.com/devcontainers/python:3.12",
+
+  // Forward HA port to your Mac
+  "forwardPorts": [8123],
+
+  // Install Home Assistant when container is created
+  "postCreateCommand": "pip install homeassistant",
+
+  // Mount your local folders into container
+  "mounts": [
+    "source=${localWorkspaceFolder}/custom_components,target=/config/custom_components,type=bind",
+    "source=${localWorkspaceFolder}/config,target=/config,type=bind"
+  ],
+
+  // Work from this directory
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind"
+}
