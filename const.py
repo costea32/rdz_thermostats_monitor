@@ -55,7 +55,7 @@ REGISTER_START_ADDRESS_3 = 0x8C  # Register 140 (decimal)
 REGISTER_MONITOR_COUNT_3 = 23  # Number of registers to monitor (140-162)
 
 # Availability timeout (if no data for 5 minutes, mark unavailable)
-AVAILABILITY_TIMEOUT = timedelta(minutes=5)
+AVAILABILITY_TIMEOUT = timedelta(minutes=1)
 
 # Update throttling (prevent overwhelming HA with high-frequency Modbus traffic)
 COORDINATOR_UPDATE_INTERVAL = timedelta(seconds=5)  # Minimum time between coordinator updates
