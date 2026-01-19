@@ -1,9 +1,9 @@
 {
   "domain": "rdz_thermostats_monitor",
   "name": "RDZ Thermostats Monitor",
-  "codeowners": ["@constantin"],
+  "codeowners": ["@costea32"],
   "config_flow": true,
-  "documentation": "https://github.com/constantin/modbus_rtu_monitor",
+  "documentation": "https://github.com/costea32/rdz_thermostats_monitor",
   "integration_type": "hub",
   "iot_class": "local_push",
   "requirements": ["pymodbus==3.11.2"],
