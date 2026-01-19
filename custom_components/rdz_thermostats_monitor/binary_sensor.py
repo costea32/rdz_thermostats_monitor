@@ -109,7 +109,7 @@ class ModbusRTUMonitorCoilSensor(
         # Device info (groups with climate and humidity sensor)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_{slave_id}")},
-            name=f"Modbus Slave {slave_id}",
+            name=f"RDZ Thermostat {slave_id}",
             manufacturer=MANUFACTURER,
             model=MODEL,
         )
@@ -165,7 +165,7 @@ class ModbusRTUMonitorZonePumpSensor(
         # Device info (groups with climate and humidity sensor)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_{slave_id}")},
-            name=f"Modbus Slave {slave_id}",
+            name=f"RDZ Thermostat {slave_id}",
             manufacturer=MANUFACTURER,
             model=MODEL,
         )

@@ -86,7 +86,7 @@ class ModbusRTUMonitorClimate(
         # Device info (groups climate + humidity sensor)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_{slave_id}")},
-            name=f"Modbus Slave {slave_id}",
+            name=f"RDZ Thermostat {slave_id}",
             manufacturer=MANUFACTURER,
             model=MODEL,
         )
@@ -160,7 +160,7 @@ class ModbusRTUMonitorClimate(
 
         # Write to device via hub
         try:
-            await self.coordinator.hub.async_write_setpoint(
+            await self.coordinator.hub.async_write_setpoint_with_retry(
                 self._slave_id,
                 temperature,
             )

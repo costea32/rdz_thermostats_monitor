@@ -1,10 +1,75 @@
-# Modbus RTU Monitor Integration - Development Guide
+# RDZ Thermostats Monitor Integration - Development Guide
 
 ## Overview
 
 This integration provides **passive monitoring** of Modbus RTU communication over TCP connections. It listens to existing Modbus traffic between a gateway and slave devices (e.g., thermostats) and creates Home Assistant entities based on discovered data.
 
 **Key Feature**: Non-intrusive monitoring - the integration does not initiate Modbus requests, it only observes traffic. The exception is the climate entity's setpoint write functionality.
+
+## Project Structure
+
+```
+modbus_rtu_monitor/                      # Repository root
+├── .devcontainer/
+│   └── devcontainer.json               # Dev container configuration for local HA testing
+├── config/                             # Home Assistant configuration for dev environment
+│   ├── configuration.yaml              # Minimal HA config for development
+│   └── custom_components/              # Mount point for integration during dev
+└── custom_components/
+    └── rdz_thermostats_monitor/       # Integration code
+        ├── __init__.py                # Integration setup/unload
+        ├── hub.py                     # TCP connection and frame decoding
+        ├── coordinator.py             # Data update coordination
+        ├── climate.py                 # Thermostat entity platform
+        ├── sensor.py                  # Humidity and register sensors
+        ├── binary_sensor.py           # Coil and zone pump sensors
+        ├── config_flow.py             # UI configuration flow
+        ├── const.py                   # Constants and data models
+        ├── manifest.json              # Integration metadata
+        ├── strings.json               # UI strings
+        └── claude.md                  # This file
+```
+
+**Note**: This file (`claude.md`) is located within the integration folder at `custom_components/rdz_thermostats_monitor/`. All file path references in this document are relative to this location unless otherwise specified.
+
+## Development Environment
+
+The repository includes a dev container configuration for local Home Assistant testing:
+
+**Dev Container Setup** (`.devcontainer/devcontainer.json`):
+- Python 3.12 base image
+- Auto-installs Home Assistant on container creation
+- Mounts `custom_components/` into `/config/custom_components/` for live development
+- Mounts `config/` as `/config/` for HA configuration
+- Forwards port 8123 to host machine for web UI access
+- Configured for IntelliJ IDEA integration
+
+**Local Development Workflow**:
+1. Open repository in IDE with dev container support (VS Code or IntelliJ IDEA)
+2. Container builds and installs Home Assistant automatically
+3. Start HA manually: `hass -c /config --debug`
+4. Edit code in `custom_components/rdz_thermostats_monitor/`
+5. Restart HA to test changes: `Ctrl+C` then rerun `hass`
+6. Access HA UI at `http://localhost:8123`
+
+**Key Commands**:
+```bash
+# Start Home Assistant in debug mode
+hass -c /config --debug
+
+# Check integration logs
+# Configured in config/configuration.yaml to show debug logs for custom_components
+
+# Verify integration is loaded
+hass -c /config --script check_config
+```
+
+**Benefits**:
+- Isolated testing environment
+- No need to install HA on host machine
+- Same environment across different development machines
+- Easy testing without affecting production HA instance
+- Live code updates (just restart HA, no rebuild)
 
 ## Use Case & Background
 
@@ -362,7 +427,7 @@ All entities for a slave share the same device:
 ```python
 DeviceInfo(
     identifiers={(DOMAIN, f"{coordinator.config_entry.entry_id}_{slave_id}")},
-    name=f"Modbus Slave {slave_id}",
+    name=f"RDZ Thermostat {slave_id}",
     manufacturer=MANUFACTURER,
     model=MODEL,
 )

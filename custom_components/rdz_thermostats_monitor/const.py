@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     pass
 
-DOMAIN = "modbus_rtu_monitor"
+DOMAIN = "rdz_thermostats_monitor"
 
 # Default values
 DEFAULT_PORT = 502
@@ -60,6 +60,10 @@ AVAILABILITY_TIMEOUT = timedelta(minutes=1)
 # Update throttling (prevent overwhelming HA with high-frequency Modbus traffic)
 COORDINATOR_UPDATE_INTERVAL = timedelta(seconds=5)  # Minimum time between coordinator updates
 FRAME_PROCESSING_DELAY = 0.1  # Seconds to sleep between frame processing batches
+
+# Setpoint write retry configuration
+SETPOINT_RETRY_COUNT = 4  # Number of retries (total writes = 5)
+SETPOINT_RETRY_INTERVAL = 1.3  # Seconds between retry attempts
 
 # Device info
 MANUFACTURER = "Modbus RTU"

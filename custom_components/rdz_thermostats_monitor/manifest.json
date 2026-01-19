@@ -1,6 +1,6 @@
 {
-  "domain": "modbus_rtu_monitor",
-  "name": "Modbus RTU Monitor",
+  "domain": "rdz_thermostats_monitor",
+  "name": "RDZ Thermostats Monitor",
   "codeowners": ["@constantin"],
   "config_flow": true,
   "documentation": "https://github.com/constantin/modbus_rtu_monitor",

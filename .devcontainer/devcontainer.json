@@ -18,5 +18,11 @@
 
   // Work from this directory
   "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind"
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+
+  "customizations": {
+    "jetbrains": {
+      "backend": "IntelliJIdea"
+    }
+  }
 }

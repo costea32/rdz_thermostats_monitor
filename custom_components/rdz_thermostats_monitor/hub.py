@@ -27,6 +27,8 @@ from .const import (
     REGISTER_START_ADDRESS_2,
     REGISTER_START_ADDRESS_3,
     SETPOINT_REGISTER,
+    SETPOINT_RETRY_COUNT,
+    SETPOINT_RETRY_INTERVAL,
     TEMP_HUMIDITY_REGISTER,
     ModbusRTUFrame,
     SlaveData,
@@ -168,6 +170,10 @@ class ModbusRTUMonitorHub:
 
         # Coordination lock for write operations
         self._write_lock = asyncio.Lock()
+
+        # Retry mechanism for setpoint writes
+        self._retry_tasks: dict[int, asyncio.Task] = {}  # slave_id -> retry task
+        self._retry_lock = asyncio.Lock()  # Protect retry task dictionary
 
         # Slave discovery and state
         self.discovered_slaves: dict[int, SlaveData] = {}
@@ -738,8 +744,124 @@ class ModbusRTUMonitorHub:
                     f"Unexpected error writing setpoint to slave {slave_id}"
                 ) from ex
 
+    async def async_write_setpoint_with_retry(
+        self, slave_id: int, temperature: float
+    ) -> None:
+        """Write temperature setpoint with automatic background retries.
+
+        Performs immediate first write, then schedules 4 background retries
+        at 0.5s intervals. If a new setpoint is requested before retries
+        complete, pending retries are cancelled.
+
+        Args:
+            slave_id: Modbus slave ID to write to
+            temperature: Target temperature in °C
+
+        Raises:
+            HomeAssistantError: If first write fails due to connection error
+        """
+        # Cancel any existing retry task for this slave
+        async with self._retry_lock:
+            if slave_id in self._retry_tasks:
+                old_task = self._retry_tasks[slave_id]
+                if not old_task.done():
+                    _LOGGER.debug(
+                        "Cancelling pending retries for slave %s (new setpoint=%.1f°C)",
+                        slave_id,
+                        temperature,
+                    )
+                    old_task.cancel()
+                    try:
+                        await old_task
+                    except asyncio.CancelledError:
+                        pass
+                del self._retry_tasks[slave_id]
+
+        # Perform first write immediately (preserve current behavior)
+        await self.async_write_setpoint(slave_id, temperature)
+
+        # Schedule background retries
+        retry_task = asyncio.create_task(
+            self._retry_setpoint_writes(slave_id, temperature)
+        )
+
+        async with self._retry_lock:
+            self._retry_tasks[slave_id] = retry_task
+
+    async def _retry_setpoint_writes(
+        self, slave_id: int, temperature: float
+    ) -> None:
+        """Background task to retry setpoint writes.
+
+        Performs SETPOINT_RETRY_COUNT writes at SETPOINT_RETRY_INTERVAL
+        intervals. Always retries regardless of connection/slave status.
+        Errors are silently logged and retries continue.
+
+        Args:
+            slave_id: Modbus slave ID to write to
+            temperature: Target temperature in °C
+        """
+        for attempt in range(1, SETPOINT_RETRY_COUNT + 1):
+            try:
+                # Wait for retry interval
+                await asyncio.sleep(SETPOINT_RETRY_INTERVAL)
+
+                # Perform retry write (no connection check - let write handle errors)
+                _LOGGER.debug(
+                    "Retry %d/%d for slave %s setpoint %.1f°C",
+                    attempt,
+                    SETPOINT_RETRY_COUNT,
+                    slave_id,
+                    temperature,
+                )
+                await self.async_write_setpoint(slave_id, temperature)
+
+            except asyncio.CancelledError:
+                # New setpoint requested - stop retrying old value
+                _LOGGER.debug(
+                    "Retries cancelled for slave %s after %d/%d attempts",
+                    slave_id,
+                    attempt - 1,
+                    SETPOINT_RETRY_COUNT,
+                )
+                raise
+            except Exception as ex:
+                # Connection error or other failure - log but continue retrying
+                _LOGGER.debug(
+                    "Retry %d/%d failed for slave %s: %s",
+                    attempt,
+                    SETPOINT_RETRY_COUNT,
+                    slave_id,
+                    ex,
+                )
+                continue
+
+        # All retries completed
+        _LOGGER.debug(
+            "Completed all %d retries for slave %s setpoint %.1f°C",
+            SETPOINT_RETRY_COUNT,
+            slave_id,
+            temperature,
+        )
+
+        # Remove from tracking dict
+        async with self._retry_lock:
+            if slave_id in self._retry_tasks:
+                del self._retry_tasks[slave_id]
+
     async def async_close(self) -> None:
         """Close hub and cleanup resources."""
+        # Cancel all pending retry tasks
+        async with self._retry_lock:
+            for slave_id, task in list(self._retry_tasks.items()):
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+            self._retry_tasks.clear()
+
         if self._monitor_task:
             self._monitor_task.cancel()
             try:
